@@ -1047,20 +1047,18 @@ bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
     case WAIT:
     case VIO:
     {
-      // printf("!!! meas.lio_vio_flg: %d \n", meas.lio_vio_flg);
+      // 获取图像捕获时间 = 图像时间戳 + 曝光时间
       double img_capture_time = img_time_buffer.front() + exposure_time_init;
-      /*** has img topic, but img topic timestamp larger than lidar end time,
-       * process lidar topic. After LIO update, the meas.lidar_frame_end_time
-       * will be refresh. ***/
+      
+      // 如果是第一次LIO更新,使用第一帧激光雷达时间作为上次更新时间
       if (meas.last_lio_update_time < 0.0)
         meas.last_lio_update_time = lid_header_time_buffer.front();
-      // printf("[ Data Cut ] wait \n");
-      // printf("[ Data Cut ] last_lio_update_time: %lf \n",
-      // meas.last_lio_update_time);
 
+      // 获取最新的激光雷达帧结束时间和IMU时间
       double lid_newest_time = lid_header_time_buffer.back() + lid_raw_data_buffer.back()->points.back().curvature / double(1000);
       double imu_newest_time = imu_buffer.back()->header.stamp.toSec();
 
+      // 如果图像时间早于上次LIO更新时间,丢弃该帧图像
       if (img_capture_time < meas.last_lio_update_time + 0.00001)
       {
         img_buffer.pop_front();
@@ -1069,18 +1067,15 @@ bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
         return false;
       }
 
+      // 如果图像时间晚于最新的激光雷达或IMU数据,返回false等待新数据
       if (img_capture_time > lid_newest_time || img_capture_time > imu_newest_time)
       {
-        // ROS_ERROR("lost first camera frame");
-        // printf("img_capture_time, lid_newest_time, imu_newest_time: %lf , %lf
-        // , %lf \n", img_capture_time, lid_newest_time, imu_newest_time);
         return false;
       }
 
       struct MeasureGroup m;
 
-      // printf("[ Data Cut ] LIO \n");
-      // printf("[ Data Cut ] img_capture_time: %lf \n", img_capture_time);
+      // 清空并填充IMU数据
       m.imu.clear();
       m.lio_time = img_capture_time;
       mtx_buffer.lock();
@@ -1089,25 +1084,26 @@ bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
         if (imu_buffer.front()->header.stamp.toSec() > m.lio_time)
           break;
 
+        // 只保留上次LIO更新之后的IMU数据
         if (imu_buffer.front()->header.stamp.toSec() > meas.last_lio_update_time)
           m.imu.push_back(imu_buffer.front());
 
         imu_buffer.pop_front();
-        // printf("[ Data Cut ] imu time: %lf \n",
-        // imu_buffer.front()->header.stamp.toSec());
       }
       mtx_buffer.unlock();
       sig_buffer.notify_all();
 
+      // 交换当前点云和下一帧点云的数据
       *(meas.pcl_proc_cur) = *(meas.pcl_proc_next);
       PointCloudXYZI().swap(*meas.pcl_proc_next);
 
+      // 预分配点云内存
       int lid_frame_num = lid_raw_data_buffer.size();
       int max_size = meas.pcl_proc_cur->size() + 24000 * lid_frame_num;
       meas.pcl_proc_cur->reserve(max_size);
       meas.pcl_proc_next->reserve(max_size);
-      // deque<PointCloudXYZI::Ptr> lidar_buffer_tmp;
 
+      // 处理激光雷达数据
       while (!lid_raw_data_buffer.empty())
       {
         if (lid_header_time_buffer.front() > img_capture_time)
@@ -1116,16 +1112,19 @@ bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
         double frame_header_time(lid_header_time_buffer.front());
         float max_offs_time_ms = (m.lio_time - frame_header_time) * 1000.0f;
 
+        // 根据点的时间戳将点分配到当前帧或下一帧
         for (int i = 0; i < pcl.size(); i++)
         {
           auto pt = pcl[i];
           if (pcl[i].curvature < max_offs_time_ms)
           {
+            // 早于图像时间的点放入当前帧
             pt.curvature += (frame_header_time - meas.last_lio_update_time) * 1000.0f;
             meas.pcl_proc_cur->points.push_back(pt);
           }
           else
           {
+            // 晚于图像时间的点放入下一帧
             pt.curvature += (frame_header_time - m.lio_time) * 1000.0f;
             meas.pcl_proc_next->points.push_back(pt);
           }
@@ -1134,45 +1133,59 @@ bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
         lid_header_time_buffer.pop_front();
       }
 
+      // 保存测量数据并设置标志为LIO模式
       meas.measures.push_back(m);
       meas.lio_vio_flg = LIO;
-      // meas.last_lio_update_time = m.lio_time;
-      // printf("!!! meas.lio_vio_flg: %d \n", meas.lio_vio_flg);
-      // printf("[ Data Cut ] pcl_proc_cur number: %d \n", meas.pcl_proc_cur
-      // ->points.size()); printf("[ Data Cut ] LIO process time: %lf \n",
-      // omp_get_wtime() - t0);
       return true;
     }
 
     case LIO:
     {
+      // 计算图像捕获时间 = 图像时间戳 + 曝光时间初值
       double img_capture_time = img_time_buffer.front() + exposure_time_init;
+      
+      // 设置测量标志为VIO模式
       meas.lio_vio_flg = VIO;
-      // printf("[ Data Cut ] VIO \n");
+      
+      // 清空测量数据
       meas.measures.clear();
+      
+      // 获取IMU数据的时间戳
       double imu_time = imu_buffer.front()->header.stamp.toSec();
 
+      // 创建测量组结构体
       struct MeasureGroup m;
-      m.vio_time = img_capture_time;
-      m.lio_time = meas.last_lio_update_time;
-      m.img = img_buffer.front();
+      m.vio_time = img_capture_time;  // 设置VIO时间为图像捕获时间
+      m.lio_time = meas.last_lio_update_time;  // 设置LIO时间为上次LIO更新时间
+      m.img = img_buffer.front();  // 获取图像数据
+      
+      // 加锁以保护共享数据
       mtx_buffer.lock();
-      // while ((!imu_buffer.empty() && (imu_time < img_capture_time)))
-      // {
-      //   imu_time = imu_buffer.front()->header.stamp.toSec();
-      //   if (imu_time > img_capture_time) break;
-      //   m.imu.push_back(imu_buffer.front());
-      //   imu_buffer.pop_front();
-      //   printf("[ Data Cut ] imu time: %lf \n",
-      //   imu_buffer.front()->header.stamp.toSec());
-      // }
+      
+      // 注释掉的代码块用于同步IMU数据
+      // 当IMU缓冲区非空且IMU时间早于图像捕获时间时:
+      // - 获取IMU时间戳
+      // - 如果IMU时间晚于图像捕获时间则跳出
+      // - 将IMU数据加入测量组
+      // - 从IMU缓冲区移除已处理的数据
+      // - 打印IMU时间信息
+      
+      // 从缓冲区移除已处理的图像数据
       img_buffer.pop_front();
       img_time_buffer.pop_front();
+      
+      // 解锁
       mtx_buffer.unlock();
+      
+      // 通知所有等待的线程
       sig_buffer.notify_all();
+      
+      // 将测量组加入测量数据
       meas.measures.push_back(m);
-      lidar_pushed = false; // after VIO update, the _lidar_frame_end_time will be refresh.
-      // printf("[ Data Cut ] VIO process time: %lf \n", omp_get_wtime() - t0);
+      
+      // VIO更新后需要刷新激光雷达帧结束时间,因此设置lidar_pushed为false
+      lidar_pushed = false;
+      
       return true;
     }
 

@@ -629,97 +629,75 @@ void VIOManager::retrieveFromVisualSparseMap(cv::Mat img, vector<pointWithVar> &
     }
   }
 
-  // RayCasting Module
+  // RayCasting模块 - 用于处理视觉特征点的光线投射
   if (raycast_en)
   {
-    // 遍历每个体素
+    // 遍历图像网格中的每个体素
     for (int i = 0; i < length; i++)
     {
-      // 如果体素在地图中或边界标记为1,则跳过
+      // 如果体素已经在地图中或者在边界上,则跳过
       if (grid_num[i] == TYPE_MAP || border_flag[i] == 1) continue;
 
-      // 计算体素在图像中的行和列
-      // int row = static_cast<int>(i / grid_n_width) * grid_size + grid_size /
-      // 2; int col = (i - static_cast<int>(i / grid_n_width) * grid_n_width) *
-      // grid_size + grid_size / 2;
-
-      // cv::circle(img_cp, cv::Point2f(col, row), 3, cv::Scalar(255, 255, 0),
-      // -1, 8);
-
-      // vector<V3D> sample_points_temp;
-      // bool add_sample = false;
-
-      // 遍历该体素的所有射线
+      // 遍历该体素的所有射线采样点
       for (const auto &it : rays_with_sample_points[i])
       {
-        // 将射线转换到世界坐标
+        // 将射线采样点从相机坐标系转换到世界坐标系
         V3D sample_point_w = new_frame_->f2w(it);
-        // sample_points_temp.push_back(sample_point_w);
 
+        // 计算采样点在世界坐标系中的体素坐标
         for (int j = 0; j < 3; j++)
         {
-          // 计算射线在世界坐标系中的体素坐标
+          // 将世界坐标除以体素大小得到体素坐标
           loc_xyz[j] = floor(sample_point_w[j] / voxel_size);
-          // 如果体素坐标小于0,则向下取整
+          // 如果坐标为负,则向下取整
           if (loc_xyz[j] < 0) { loc_xyz[j] -= 1.0; }
         }
-        // 创建体素位置对象
+        
+        // 创建体素位置标识
         VOXEL_LOCATION sample_pos(loc_xyz[0], loc_xyz[1], loc_xyz[2]);
-        // 在子特征地图中查找该位置
+        
+        // 在子特征地图中查找该体素位置
         auto corre_sub_feat_map = sub_feat_map.find(sample_pos);
-        // 如果该位置存在特征点,则跳过
+        // 如果该位置已存在于子特征地图中,则跳过
         if (corre_sub_feat_map != sub_feat_map.end()) break;
 
-        // 在特征地图中查找该位置
+        // 在主特征地图中查找该体素位置
         auto corre_feat_map = feat_map.find(sample_pos);
-        // 如果该位置存在特征点,则跳过
         if (corre_feat_map != feat_map.end())
         {
-          // 标记该位置是否在视野内
+          // 标记该体素是否在相机视野内
           bool voxel_in_fov = false;
-          // 获取该位置的所有特征点
+          // 获取该体素中的所有特征点
           std::vector<VisualPoint *> &voxel_points = corre_feat_map->second->voxel_points;
-          // 获取特征点数量
           int voxel_num = voxel_points.size();
-          // 如果特征点数量为0,则跳过
           if (voxel_num == 0) continue;
-          // 遍历该位置的所有特征点
+
+          // 遍历体素中的所有特征点
           for (int j = 0; j < voxel_num; j++)
           {
-            // 获取特征点
             VisualPoint *pt = voxel_points[j];
-            // 如果特征点为空则跳过
-            if (pt == nullptr) continue;
-            // 如果特征点没有观测则跳过
-            if (pt->obs_.size() == 0) continue;
+            if (pt == nullptr || pt->obs_.size() == 0) continue;
 
-            // sub_map_ray.push_back(pt); // cloud_visual_sub_map
-            // add_sample = true;
-
-            // 获取特征点的法向量
+            // 获取特征点在当前帧下的法向量和方向
             V3D norm_vec(new_frame_->T_f_w_.rotation_matrix() * pt->normal_);
-            // 获取特征点的方向
             V3D dir(new_frame_->T_f_w_ * pt->pos_);
-            // 如果特征点在相机后方则跳过
-            if (dir[2] < 0) continue;
-            // 归一化方向向量
+            if (dir[2] < 0) continue; // 如果点在相机后方则跳过
             dir.normalize();
-            // if (dir.dot(norm_vec) <= 0.17) continue; // 0.34 70 degree 0.17 80 degree 0.08 85 degree
 
             // 将特征点投影到图像平面
             V2D pc(new_frame_->w2c(pt->pos_));
-            // 如果特征点在图像边界内
             if (new_frame_->cam_->isInFrame(pc.cast<int>(), border))
             {
-              // 将该位置标记为在视野内
+              // 如果特征点在图像边界内
               voxel_in_fov = true;
               int index = static_cast<int>(pc[1] / grid_size) * grid_n_width + static_cast<int>(pc[0] / grid_size);
               grid_num[index] = TYPE_MAP;
+              
               // 计算特征点到相机中心的距离
               Vector3d obs_vec(new_frame_->pos() - pt->pos_);
-              // 计算距离
               float cur_dist = obs_vec.norm();
 
+              // 如果距离小于当前记录的最小距离,则更新
               if (cur_dist <= map_dist[index])
               {
                 map_dist[index] = cur_dist;
@@ -727,41 +705,32 @@ void VIOManager::retrieveFromVisualSparseMap(cv::Mat img, vector<pointWithVar> &
               }
             }
           }
-          // 如果该位置在视野内,则将该位置从子特征地图中删除
+          // 如果体素在视野内,将其添加到子特征地图
           if (voxel_in_fov) sub_feat_map[sample_pos] = 0;
           break;
         }
         else
         {
-          // 创建体素位置对象
-          VOXEL_LOCATION sample_pos(loc_xyz[0], loc_xyz[1], loc_xyz[2]);
-          // 在平面地图中查找该位置
+          // 如果特征地图中没有该体素,则在平面地图中查找
           auto iter = plane_map.find(sample_pos);
-          // 如果该位置存在平面,则跳过
           if (iter != plane_map.end())
           {
-            // 在八叉树中查找该位置
+            // 在八叉树中查找对应的体素
             VoxelOctoTree *current_octo;
             current_octo = iter->second->find_correspond(sample_point_w);
-            // 如果该位置存在平面,则跳过
             if (current_octo->plane_ptr_->is_plane_)
             {
-              // 创建平面中心点对象
+              // 如果找到平面,则将平面中心点添加到子特征地图
               pointWithVar plane_center;
-              // 获取平面
               VoxelPlane &plane = *current_octo->plane_ptr_;
-              // 将平面中心点赋值给平面中心点对象
               plane_center.point_w = plane.center_;
-              // 将平面法向量赋值给平面中心点对象
               plane_center.normal = plane.normal_;
-              // 将平面中心点对象添加到子特征地图中
               visual_submap->add_from_voxel_map.push_back(plane_center);
               break;
             }
           }
         }
       }
-      // if(add_sample) sample_points.push_back(sample_points_temp);
     }
   }
 
