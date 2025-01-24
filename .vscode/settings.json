@@ -12,5 +12,16 @@
         "/catkin_ws/devel/lib/python3/dist-packages",
         "/opt/ros/noetic/lib/python3/dist-packages",
         "/path/to/SuperGluePretrainedNetwork"
-    ]
+    ],
+    "files.associations": {
+        "*.ipp": "cpp",
+        "any": "cpp",
+        "bitset": "cpp",
+        "memory": "cpp",
+        "random": "cpp",
+        "future": "cpp",
+        "optional": "cpp",
+        "hash_map": "cpp",
+        "hash_set": "cpp"
+    }
 }

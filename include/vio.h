@@ -1,4 +1,4 @@
-/* 
+/*
 This file is part of FAST-LIVO2: Fast, Direct LiDAR-Inertial-Visual Odometry.
 
 Developer: Chunran Zheng <zhengcr@connect.hku.hk>
@@ -71,11 +71,15 @@ public:
   std::vector<VisualPoint *> voxel_points;
   int count;
   VOXEL_POINTS(int num) : count(num) {}
-  ~VOXEL_POINTS() 
-  { 
-    for (VisualPoint* vp : voxel_points) 
+  ~VOXEL_POINTS()
+  {
+    for (VisualPoint *vp : voxel_points)
     {
-      if (vp != nullptr) { delete vp; vp = nullptr; }
+      if (vp != nullptr)
+      {
+        delete vp;
+        vp = nullptr;
+      }
     }
   }
 };
@@ -83,48 +87,97 @@ public:
 class VIOManager
 {
 public:
+  // 图像网格大小
   int grid_size;
+  // 相机模型指针
   vk::AbstractCamera *cam;
+  // 针孔相机模型指针
   vk::PinholeCamera *pinhole_cam;
+  // 当前状态指针
   StatesGroup *state;
+  // 预测状态指针
   StatesGroup *state_propagat;
+  // 旋转矩阵和雅可比矩阵:
+  // Rli: IMU到LiDAR的旋转矩阵
+  // Rci: 相机到IMU的旋转矩阵
+  // Rcl: 相机到LiDAR的旋转矩阵
+  // Rcw: 相机到世界坐标系的旋转矩阵
+  // Jdphi_dR, Jdp_dt, Jdp_dR: 雅可比矩阵
   M3D Rli, Rci, Rcl, Rcw, Jdphi_dR, Jdp_dt, Jdp_dR;
+  // 平移向量:
+  // Pli: IMU到LiDAR的平移
+  // Pci: 相机到IMU的平移
+  // Pcl: 相机到LiDAR的平移
+  // Pcw: 相机到世界坐标系的平移
   V3D Pli, Pci, Pcl, Pcw;
+  // 网格类型标记
   vector<int> grid_num;
+  // 地图索引
   vector<int> map_index;
+  // 边界标记
   vector<int> border_flag;
+  // 更新标记
   vector<int> update_flag;
+  // 地图距离
   vector<float> map_dist;
+  // 扫描值
   vector<float> scan_value;
+  // 特征块缓存
   vector<float> patch_buffer;
+  // 功能开关标志:
+  // normal_en: 法向量估计使能
+  // inverse_composition_en: 逆向组合法使能
+  // exposure_estimate_en: 曝光估计使能
+  // raycast_en: 光线投射使能
+  // has_ref_patch_cache: 是否有参考特征块缓存
   bool normal_en, inverse_composition_en, exposure_estimate_en, raycast_en, has_ref_patch_cache;
+  // ncc_en: 归一化互相关使能
+  // colmap_output_en: COLMAP输出使能
   bool ncc_en = false, colmap_output_en = false;
 
-  int width, height, grid_n_width, grid_n_height, length;
-  double image_resize_factor;
-  double fx, fy, cx, cy;
-  int patch_pyrimid_level, patch_size, patch_size_total, patch_size_half, border, warp_len;
-  int max_iterations, total_points;
+  // 图像和网格参数
+  int width, height;               // 图像宽高
+  int grid_n_width, grid_n_height; // 网格数量
+  int length;                      // 总网格数
+  double image_resize_factor;      // 图像缩放因子
+  double fx, fy, cx, cy;           // 相机内参
 
-  double img_point_cov, outlier_threshold, ncc_thre;
-  
-  SubSparseMap *visual_submap;
-  std::vector<std::vector<V3D>> rays_with_sample_points;
+  // 特征块参数
+  int patch_pyrimid_level; // 金字塔层数
+  int patch_size;          // 特征块大小
+  int patch_size_total;    // 特征块总像素数
+  int patch_size_half;     // 特征块半宽
+  int border;              // 边界大小
+  int warp_len;            // 变形长度
+  int max_iterations;      // 最大迭代次数
+  int total_points;        // 总点数
 
-  double compute_jacobian_time, update_ekf_time;
-  double ave_total = 0;
-  // double ave_build_residual_time = 0;
-  // double ave_ekf_time = 0;
+  // 阈值参数
+  double img_point_cov;     // 图像点协方差
+  double outlier_threshold; // 外点阈值
+  double ncc_thre;          // 归一化互相关阈值
 
-  int frame_count = 0;
-  bool plot_flag;
+  // 子地图和光线采样
+  SubSparseMap *visual_submap;                           // 视觉子地图
+  std::vector<std::vector<V3D>> rays_with_sample_points; // 带采样点的射线
+
+  // 时间统计
+  double compute_jacobian_time; // 计算雅可比时间
+  double update_ekf_time;       // 更新EKF时间
+  double ave_total = 0;         // 平均总时间
+  // double ave_build_residual_time = 0;  // 平均构建残差时间
+  // double ave_ekf_time = 0;             // 平均EKF时间
+
+  // 帧计数和绘图标志
+  int frame_count = 0; // 帧计数器
+  bool plot_flag;      // 绘图标志
 
   Matrix<double, DIM_STATE, DIM_STATE> G, H_T_H;
   MatrixXd K, H_sub_inv;
 
   ofstream fout_camera, fout_colmap;
   unordered_map<VOXEL_LOCATION, VOXEL_POINTS *> feat_map;
-  unordered_map<VOXEL_LOCATION, int> sub_feat_map; 
+  unordered_map<VOXEL_LOCATION, int> sub_feat_map;
   unordered_map<int, Warp *> warp_map;
   vector<VisualPoint *> retrieve_voxel_points;
   vector<pointWithVar> append_voxel_points;
@@ -154,7 +207,7 @@ public:
   void resetGrid();
   void updateVisualMapPoints(cv::Mat img);
   void getWarpMatrixAffine(const vk::AbstractCamera &cam, const Vector2d &px_ref, const Vector3d &f_ref, const double depth_ref, const SE3 &T_cur_ref,
-                           const int level_ref, 
+                           const int level_ref,
                            const int pyramid_level, const int halfpatch_size, Matrix2d &A_cur_ref);
   void getWarpMatrixAffineHomography(const vk::AbstractCamera &cam, const V2D &px_ref,
                                      const V3D &xyz_ref, const V3D &normal_ref, const SE3 &T_cur_ref, const int level_ref, Matrix2d &A_cur_ref);
@@ -170,7 +223,7 @@ public:
   double calculateNCC(float *ref_patch, float *cur_patch, int patch_size);
   int getBestSearchLevel(const Matrix2d &A_cur_ref, const int max_level);
   V3F getInterpolatedPixel(cv::Mat img, V2D pc);
-  
+
   // void resetRvizDisplay();
   // deque<VisualPoint *> map_cur_frame;
   // deque<VisualPoint *> sub_map_ray;
