@@ -117,22 +117,22 @@ include_directories(
 )
 
 # Add libraries
-add_library(vio src/vio.cpp src/frame.cpp src/visual_point.cpp)
-add_library(lio src/voxel_map.cpp)
-add_library(pre src/preprocess.cpp)
-add_library(imu_proc src/IMU_Processing.cpp)
-add_library(laser_mapping src/LIVMapper.cpp)
+add_library(fast_vio src/vio.cpp src/frame.cpp src/visual_point.cpp)
+add_library(fast_lio src/voxel_map.cpp)
+add_library(fast_pre src/preprocess.cpp)
+add_library(fast_imu_proc src/IMU_Processing.cpp)
+add_library(fast_laser_mapping src/LIVMapper.cpp)
 
 # Add the main executable
 add_executable(fastlivo_mapping src/main.cpp)
 
 # Link libraries to the executable
 target_link_libraries(fastlivo_mapping
-  laser_mapping
-  vio
-  lio
-  pre
-  imu_proc
+  fast_laser_mapping
+  fast_vio
+  fast_lio
+  fast_pre
+  fast_imu_proc
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
   ${OpenCV_LIBRARIES}

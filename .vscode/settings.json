@@ -1,0 +1,16 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/goslam/catkin_ws1/devel/lib/python3/dist-packages",
+        "/rosworkspace/devel/lib/python3/dist-packages",
+        "/catkin_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages",
+        "/path/to/SuperGluePretrainedNetwork"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/goslam/catkin_ws1/devel/lib/python3/dist-packages",
+        "/rosworkspace/devel/lib/python3/dist-packages",
+        "/catkin_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages",
+        "/path/to/SuperGluePretrainedNetwork"
+    ]
+}

@@ -743,6 +743,15 @@ void LIVMapper::imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in)
   msg->header.stamp = ros::Time().fromSec(msg->header.stamp.toSec() - imu_time_offset);
   double timestamp = msg->header.stamp.toSec();
 
+  if (true)
+  {
+    // imu 角速度 加速度矫正
+    msg->angular_velocity.x = msg_in->angular_velocity.y;
+    msg->angular_velocity.y = msg_in->angular_velocity.x;
+    msg->linear_acceleration.x = msg_in->linear_acceleration.y;
+    msg->linear_acceleration.y = msg_in->linear_acceleration.x;
+  }
+
   if (fabs(last_timestamp_lidar - timestamp) > 0.5 && (!ros_driver_fix_en))
   {
     ROS_WARN("IMU and LiDAR not synced! delta time: %lf .\n", last_timestamp_lidar - timestamp);
