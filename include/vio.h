@@ -23,16 +23,25 @@ which is included as part of this source code package.
 #include <vikit/vision.h>
 #include <vikit/pinhole_camera.h>
 
+/**
+ * @brief 视觉稀疏地图的子图结构
+ * 用于存储和管理视觉SLAM中的特征点及其相关信息
+ */
 struct SubSparseMap
 {
-  vector<float> propa_errors;
-  vector<float> errors;
-  vector<vector<float>> warp_patch;
-  vector<int> search_levels;
-  vector<VisualPoint *> voxel_points;
-  vector<double> inv_expo_list;
-  vector<pointWithVar> add_from_voxel_map;
+  vector<float> propa_errors;              // 特征点投影误差的传播值
+  vector<float> errors;                    // 特征点的重投影误差
+  vector<vector<float>> warp_patch;        // 图像块的变形结果
+  vector<int> search_levels;               // 特征点搜索的金字塔层级
+  vector<VisualPoint *> voxel_points;      // 体素中的视觉特征点
+  vector<double> inv_expo_list;            // 逆曝光时间列表
+  vector<pointWithVar> add_from_voxel_map; // 从体素地图中新添加的点
 
+  /**
+   * @brief 构造函数
+   * 预分配各个vector的容量以提高性能
+   * SIZE_LARGE = 500, SIZE_SMALL = 100
+   */
   SubSparseMap()
   {
     propa_errors.reserve(SIZE_LARGE);
@@ -44,6 +53,10 @@ struct SubSparseMap
     add_from_voxel_map.reserve(SIZE_SMALL);
   };
 
+  /**
+   * @brief 重置函数
+   * 清空所有vector中的数据
+   */
   void reset()
   {
     propa_errors.clear();

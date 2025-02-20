@@ -227,28 +227,46 @@ void VIOManager::getImagePatch(cv::Mat img, V2D pc, float *patch_tmp, int level)
   }
 }
 
+/**
+ * @brief 将视觉特征点插入到体素地图中
+ * 该函数将新的视觉特征点按照其3D位置分配到对应的体素中
+ * @param pt_new 要插入的新视觉特征点指针
+ */
 void VIOManager::insertPointIntoVoxelMap(VisualPoint *pt_new)
 {
+  // 获取特征点在世界坐标系下的3D位置
   V3D pt_w(pt_new->pos_[0], pt_new->pos_[1], pt_new->pos_[2]);
+
+  // 设置体素大小为0.5米
   double voxel_size = 0.5;
+
+  // 计算特征点所在的体素坐标
   float loc_xyz[3];
   for (int j = 0; j < 3; j++)
   {
+    // 将世界坐标除以体素大小得到体素坐标
     loc_xyz[j] = pt_w[j] / voxel_size;
+    // 对负坐标进行向下取整处理
     if (loc_xyz[j] < 0)
     {
       loc_xyz[j] -= 1.0;
     }
   }
+
+  // 根据体素坐标创建体素位置标识
   VOXEL_LOCATION position((int64_t)loc_xyz[0], (int64_t)loc_xyz[1], (int64_t)loc_xyz[2]);
+
+  // 在特征地图中查找该体素位置
   auto iter = feat_map.find(position);
   if (iter != feat_map.end())
   {
+    // 如果该体素已存在,将新特征点添加到体素中并更新计数
     iter->second->voxel_points.push_back(pt_new);
     iter->second->count++;
   }
   else
   {
+    // 如果该体素不存在,创建新的体素并添加特征点
     VOXEL_POINTS *ot = new VOXEL_POINTS(0);
     ot->voxel_points.push_back(pt_new);
     feat_map[position] = ot;
@@ -355,6 +373,12 @@ double VIOManager::calculateNCC(float *ref_patch, float *cur_patch, int patch_si
   return numerator / sqrt(demoniator1 * demoniator2 + 1e-10);
 }
 
+/**
+ * @brief 从视觉稀疏地图中提取特征点，并生成深度图。
+ * @param img 输入的图像。
+ * @param pg 包含世界坐标系下点的向量。
+ * @param plane_map 平面体素八叉树的哈希表。
+ */
 void VIOManager::retrieveFromVisualSparseMap(cv::Mat img, vector<pointWithVar> &pg, const unordered_map<VOXEL_LOCATION, VoxelOctoTree *> &plane_map)
 {
   if (feat_map.size() <= 0)
@@ -391,6 +415,7 @@ void VIOManager::retrieveFromVisualSparseMap(cv::Mat img, vector<pointWithVar> &
 
   // printf("pg size: %zu \n", pg.size());
 
+  // 遍历所有特征点
   for (int i = 0; i < pg.size(); i++)
   {
     // double t0 = omp_get_wtime();
@@ -410,9 +435,11 @@ void VIOManager::retrieveFromVisualSparseMap(cv::Mat img, vector<pointWithVar> &
     // t_position += omp_get_wtime()-t0;
     // double t1 = omp_get_wtime();
 
+    // 检查当前特征点是否在子特征地图中
     auto iter = sub_feat_map.find(position);
     if (iter == sub_feat_map.end())
     {
+      // 如果不在子特征地图中，则添加一个新条目
       sub_feat_map[position] = 0;
     }
     else
@@ -423,6 +450,7 @@ void VIOManager::retrieveFromVisualSparseMap(cv::Mat img, vector<pointWithVar> &
     // t_insert += omp_get_wtime()-t1;
     // double t2 = omp_get_wtime();
 
+    // 如果特征点在图像范围内，则计算其深度，存到深度图 depth_img
     V3D pt_c(new_frame_->w2f(pt_w));
 
     if (pt_c[2] > 0)
@@ -462,12 +490,14 @@ void VIOManager::retrieveFromVisualSparseMap(cv::Mat img, vector<pointWithVar> &
     auto corre_voxel = feat_map.find(position);
     // double t5 = omp_get_wtime();
 
+    // 检查子特征地图 sub_feat_map 中的体素是否在特征地图 feat_map 中
     if (corre_voxel != feat_map.end())
     {
       bool voxel_in_fov = false;
       std::vector<VisualPoint *> &voxel_points = corre_voxel->second->voxel_points;
       int voxel_num = voxel_points.size();
 
+      // 遍历体素中的视觉点
       for (int i = 0; i < voxel_num; i++)
       {
         VisualPoint *pt = voxel_points[i];
@@ -486,10 +516,12 @@ void VIOManager::retrieveFromVisualSparseMap(cv::Mat img, vector<pointWithVar> &
         V2D pc(new_frame_->w2c(pt->pos_));
         if (new_frame_->cam_->isInFrame(pc.cast<int>(), border))
         {
+          // 如果该视觉点在图像范围内
           // cv::circle(img_cp, cv::Point2f(pc[0], pc[1]), 3, cv::Scalar(0, 255, 255), -1, 8);
           voxel_in_fov = true;
           int index = static_cast<int>(pc[1] / grid_size) * grid_n_width + static_cast<int>(pc[0] / grid_size);
           grid_num[index] = TYPE_MAP;
+          // 点到相机的距离
           Vector3d obs_vec(new_frame_->pos() - pt->pos_);
           float cur_dist = obs_vec.norm();
           if (cur_dist <= map_dist[index])
@@ -499,6 +531,7 @@ void VIOManager::retrieveFromVisualSparseMap(cv::Mat img, vector<pointWithVar> &
           }
         }
       }
+      // 如果不在图像范围内，删除该体素
       if (!voxel_in_fov)
       {
         DeleteKeyList.push_back(position);
@@ -506,7 +539,7 @@ void VIOManager::retrieveFromVisualSparseMap(cv::Mat img, vector<pointWithVar> &
     }
   }
 
-  // RayCasting Module
+  // 光线投射模块
   if (raycast_en)
   {
     for (int i = 0; i < length; i++)
@@ -601,6 +634,7 @@ void VIOManager::retrieveFromVisualSparseMap(cv::Mat img, vector<pointWithVar> &
         }
         else
         {
+          // 如果在视觉点地图 feat_map 中没有找到，在体素地图 plane_map 中寻找
           VOXEL_LOCATION sample_pos(loc_xyz[0], loc_xyz[1], loc_xyz[2]);
           auto iter = plane_map.find(sample_pos);
           if (iter != plane_map.end())
