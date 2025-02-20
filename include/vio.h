@@ -1,4 +1,4 @@
-/* 
+/*
 This file is part of FAST-LIVO2: Fast, Direct LiDAR-Inertial-Visual Odometry.
 
 Developer: Chunran Zheng <zhengcr@connect.hku.hk>
@@ -71,11 +71,15 @@ public:
   std::vector<VisualPoint *> voxel_points;
   int count;
   VOXEL_POINTS(int num) : count(num) {}
-  ~VOXEL_POINTS() 
-  { 
-    for (VisualPoint* vp : voxel_points) 
+  ~VOXEL_POINTS()
+  {
+    for (VisualPoint *vp : voxel_points)
     {
-      if (vp != nullptr) { delete vp; vp = nullptr; }
+      if (vp != nullptr)
+      {
+        delete vp;
+        vp = nullptr;
+      }
     }
   }
 };
@@ -107,7 +111,7 @@ public:
   int max_iterations, total_points;
 
   double img_point_cov, outlier_threshold, ncc_thre;
-  
+
   SubSparseMap *visual_submap;
   std::vector<std::vector<V3D>> rays_with_sample_points;
 
@@ -124,7 +128,7 @@ public:
 
   ofstream fout_camera, fout_colmap;
   unordered_map<VOXEL_LOCATION, VOXEL_POINTS *> feat_map;
-  unordered_map<VOXEL_LOCATION, int> sub_feat_map; 
+  unordered_map<VOXEL_LOCATION, int> sub_feat_map;
   unordered_map<int, Warp *> warp_map;
   vector<VisualPoint *> retrieve_voxel_points;
   vector<pointWithVar> append_voxel_points;
@@ -154,7 +158,7 @@ public:
   void resetGrid();
   void updateVisualMapPoints(cv::Mat img);
   void getWarpMatrixAffine(const vk::AbstractCamera &cam, const Vector2d &px_ref, const Vector3d &f_ref, const double depth_ref, const SE3 &T_cur_ref,
-                           const int level_ref, 
+                           const int level_ref,
                            const int pyramid_level, const int halfpatch_size, Matrix2d &A_cur_ref);
   void getWarpMatrixAffineHomography(const vk::AbstractCamera &cam, const V2D &px_ref,
                                      const V3D &xyz_ref, const V3D &normal_ref, const SE3 &T_cur_ref, const int level_ref, Matrix2d &A_cur_ref);
@@ -170,7 +174,15 @@ public:
   double calculateNCC(float *ref_patch, float *cur_patch, int patch_size);
   int getBestSearchLevel(const Matrix2d &A_cur_ref, const int max_level);
   V3F getInterpolatedPixel(cv::Mat img, V2D pc);
-  
+
+  /**
+   * 检查点是否在水平视场角范围内
+   * @param p_w 世界坐标系下的点
+   * @param max_fov_angle 最大视场角(弧度)
+   * @return 是否在视场角范围内
+   */
+  bool isInHorizontalFOV(const V3D &p_w, double max_fov_angle);
+
   // void resetRvizDisplay();
   // deque<VisualPoint *> map_cur_frame;
   // deque<VisualPoint *> sub_map_ray;
