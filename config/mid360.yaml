@@ -7,7 +7,7 @@ common:
   ros_driver_bug_fix: true
 
 extrin_calib:
-  extrinsic_T: [0.0, 0.0, 0.0]
+  extrinsic_T: [-0.011, -0.02329, 0.04412]
   extrinsic_R: [1, 0, 0, 0, 1, 0, 0, 0, 1]
   # Pcl: [-0.000343572, -0.079064, -0.0387288]
   Pcl: [-0.000343572, -0.079064, -0.00227309]

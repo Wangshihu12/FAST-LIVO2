@@ -86,5 +86,6 @@
         "variant": "cpp",
         "bit": "cpp",
         "*.ipp": "cpp"
-    }
+    },
+    "ros.distro": "noetic"
 }
